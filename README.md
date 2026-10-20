@@ -27,6 +27,12 @@ is created or changed**. A fresh install starts in **dry-run mode**: it only rep
 
 Supported: Jellyfin 10.10, 10.11 and 12.x.
 
+### Manual install
+
+Download `manual-install_CollectionGuard_<version>_jellyfin-<your version>.zip` from the latest release, extract it
+**into** `<jellyfin data>/plugins/` (it already contains the folder `CollectionGuard_<version>`) and restart Jellyfin.
+Windows: `C:\ProgramData\Jellyfin\Server\plugins\`.
+
 ## Build yourself
 
 ```

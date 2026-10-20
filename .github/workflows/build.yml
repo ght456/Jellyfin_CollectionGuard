@@ -32,13 +32,18 @@ jobs:
           VERSION=$(grep -oP '(?<=<AssemblyVersion>)[^<]+' Jellyfin.Plugin.CollectionGuard/Jellyfin.Plugin.CollectionGuard.csproj)
           ABI=$(echo "${{ matrix.jellyfin }}" | awk -F. '{print $1"."$2".0.0"}')
           mkdir pkg && cp out/Jellyfin.Plugin.CollectionGuard.dll pkg/
+          # for the plugin catalog: DLL at the zip root
           (cd pkg && zip -q ../collection-guard_${VERSION}_jellyfin-${{ matrix.jellyfin }}.zip *)
+          # for manual install: contains the ready-named folder CollectionGuard_<version>/
+          mkdir -p manual/CollectionGuard_${VERSION} && cp pkg/*.dll manual/CollectionGuard_${VERSION}/
+          (cd manual && zip -qr ../manual-install_CollectionGuard_${VERSION}_jellyfin-${{ matrix.jellyfin }}.zip CollectionGuard_${VERSION})
           echo "$ABI" > abi_${{ matrix.jellyfin }}.txt
       - uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.jellyfin }}
           path: |
             collection-guard_*.zip
+            manual-install_*.zip
             abi_*.txt
 
   release:
