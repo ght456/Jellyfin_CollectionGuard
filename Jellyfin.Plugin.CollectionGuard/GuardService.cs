@@ -72,6 +72,7 @@ public class GuardService
             .Where(v => v.Id != Guid.Empty && v.Name.Length > 0)
             .ToList();
         var restricted = new HashSet<string>(cfg.RestrictedLibraries ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+        rep.AppendLine(T("Vorsilbe: ", "Prefix: ") + prefix);
         rep.AppendLine(T("Eingeschränkte Bibliotheken: ", "Restricted libraries: ") +
                        (restricted.Count > 0 ? string.Join(", ", restricted) : T("(keine gewählt)", "(none selected)")));
 
@@ -186,6 +187,16 @@ public class GuardService
                 }
 
                 tagged++;
+                if (tagged <= 25)
+                {
+                    rep.AppendLine($"  {T("Markierung", "Tags")} „{item.Name}“: " +
+                                   (have.Count > 0 ? string.Join(", ", have) : T("(keine)", "(none)")) + " → " + string.Join(", ", want));
+                }
+                else if (tagged == 26)
+                {
+                    rep.AppendLine("  " + T("… weitere Markierungen siehe Zusammenfassung", "… more tag changes, see summary"));
+                }
+
                 if (!dry)
                 {
                     item.Tags = tags.Where(t => !t.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).Concat(want).ToArray();
@@ -232,10 +243,13 @@ public class GuardService
                 }
 
                 usersChanged++;
+                var added = newTags.Except(oldTags, StringComparer.OrdinalIgnoreCase).ToList();
+                var removed = oldTags.Except(newTags, StringComparer.OrdinalIgnoreCase).ToList();
                 rep.AppendLine($"  {T("Benutzer", "User")} {user.Username}: " +
                                (hadRestricted ? T("Zugriff auf eingeschränkte Bibliotheken entfernt; ", "access to restricted libraries removed; ") : string.Empty) +
                                (policy.EnableAllFolders ? T("„alle Bibliotheken“ → alle freien; ", "“all libraries” → all unrestricted; ") : string.Empty) +
-                               T("Sperr-Schlagwörter aktualisiert", "blocked tags updated"));
+                               (added.Count > 0 ? T("Sperre neu: ", "blocks added: ") + string.Join(", ", added) + "; " : string.Empty) +
+                               (removed.Count > 0 ? T("Sperre weg: ", "blocks removed: ") + string.Join(", ", removed) : string.Empty));
                 if (!dry)
                 {
                     policy.EnableAllFolders = false;
