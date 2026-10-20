@@ -41,8 +41,8 @@
                     <div class="fieldDescription" data-t="langDesc"></div>
                 </div>
 
-                <button is="emby-button" type="submit" class="raised button-submit block"><span data-t="save"></span></button>
-                <button is="emby-button" type="button" id="runNow" class="raised block"><span data-t="run"></span></button>
+                <div id="cgSaved" style="min-height:1.4em;margin:10px 0;opacity:.85"></div>
+                <button is="emby-button" type="button" id="runNow" class="raised button-submit block"><span data-t="run"></span></button>
             </form>
 
             <style>
@@ -82,7 +82,9 @@
                 dryRun: ['Testmodus: nur berichten, nichts ändern', 'Dry run: report only, change nothing'],
                 prefixDesc: ['Vorsilbe der Bibliotheks-Schlagwörter (z. B. „lib:“ → „lib:Filme“).', 'Prefix of the library tags (e.g. “lib:” → “lib:Movies”).'],
                 langDesc: ['Sprache des Berichts', 'Report language'],
-                save: ['Speichern', 'Save'],
+                saving: ['speichert …', 'saving …'],
+                saved: ['✓ gespeichert', '✓ saved'],
+                autosave: ['Änderungen werden automatisch gespeichert.', 'Changes are saved automatically.'],
                 run: ['Jetzt prüfen', 'Run now'],
                 lastRun: ['Letzter Lauf', 'Last run'],
                 none: ['(noch kein Lauf)', '(no run yet)'],
@@ -136,23 +138,38 @@
                     page.querySelector('#TagPrefix').value = cfg.TagPrefix || 'lib:';
                     page.querySelector('#Language').value = cfg.Language || 'auto';
                     page.querySelector('#LastReport').textContent = cfg.LastReport || t('none');
+                    page.querySelector('#cgSaved').textContent = t('autosave');
+                    loaded = true;
                     Dashboard.hideLoadingMsg();
                 });
             });
 
-            page.querySelector('#CollectionGuardForm').addEventListener('submit', function (e) {
-                e.preventDefault();
-                Dashboard.showLoadingMsg();
-                ApiClient.getPluginConfiguration(pluginId).then(function (cfg) {
+            var saveTimer = null, loaded = false;
+            function saveNow() {
+                var info = page.querySelector('#cgSaved');
+                info.textContent = t('saving');
+                return ApiClient.getPluginConfiguration(pluginId).then(function (cfg) {
                     cfg.RestrictedLibraries = checkedValues('restrictedLibs');
                     cfg.AllowedUsers = checkedValues('allowedUsers');
                     flags.forEach(function (k) { cfg[k] = page.querySelector('#' + k).checked; });
                     cfg.TagPrefix = page.querySelector('#TagPrefix').value || 'lib:';
                     cfg.Language = page.querySelector('#Language').value || 'auto';
-                    ApiClient.updatePluginConfiguration(pluginId, cfg).then(Dashboard.processPluginConfigurationUpdateResult);
+                    return ApiClient.updatePluginConfiguration(pluginId, cfg);
+                }).then(function () {
+                    info.textContent = t('saved');
+                }, function () {
+                    info.textContent = '⚠';
                 });
-                return false;
-            });
+            }
+            function scheduleSave() {
+                if (!loaded) { return; }
+                clearTimeout(saveTimer);
+                saveTimer = setTimeout(saveNow, 500);
+            }
+            var form = page.querySelector('#CollectionGuardForm');
+            form.addEventListener('change', scheduleSave);
+            form.addEventListener('input', scheduleSave);
+            form.addEventListener('submit', function (e) { e.preventDefault(); saveNow(); return false; });
 
             page.querySelector('#runNow').addEventListener('click', function () {
                 var btn = page.querySelector('#runNow');
@@ -167,7 +184,8 @@
                     box.textContent = text;
                     box.classList.remove('cg-new'); void box.offsetWidth; box.classList.add('cg-new');
                 }
-                ApiClient.getScheduledTasks().then(function (tasks) {
+                clearTimeout(saveTimer);
+                saveNow().then(function () { return ApiClient.getScheduledTasks(); }).then(function (tasks) {
                     var task = tasks.filter(function (x) { return x.Key === 'CollectionGuardCheck'; })[0];
                     if (!task) { Dashboard.alert(t('notFound')); return; }
                     btn.disabled = true;
