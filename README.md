@@ -9,6 +9,7 @@ from a private library). **Collection Guard** fixes that permanently:
 |---|---|
 | **Untangle** | removes collections nested in collections; splits collections that mix restricted and unrestricted items (the smaller side is removed – only the link, never the media) |
 | **Empty containers** | deletes empty collections and playlists (optional) |
+| **Clean metadata** | a collection only keeps the genres, studios and rating its items really have – otherwise leftovers from removed items show up in other users' filter lists |
 | **Tag** | tags every collection/playlist with the libraries its items come from (`lib:Movies`, `lib:Private` …) |
 | **Lock users** | every user except the allowed ones loses access to restricted libraries (administrators included) and gets the tags of all libraries they may not see as *blocked tags* – so collections from those libraries disappear for them |
 

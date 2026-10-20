@@ -24,6 +24,7 @@
                 <h3 data-t="actionsTitle"></h3>
                 <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="Untangle"/><span data-t="untangle"></span></label>
                 <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="DeleteEmpty"/><span data-t="deleteEmpty"></span></label>
+                <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="CleanMetadata"/><span data-t="cleanMeta"></span></label>
                 <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="LockUsers"/><span data-t="lockUsers"></span></label>
                 <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="Realtime"/><span data-t="realtime"></span></label>
                 <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="DryRun"/><span data-t="dryRun"></span></label>
@@ -77,6 +78,7 @@
                 actionsTitle: ['Was soll passieren', 'What to do'],
                 untangle: ['Sammlungen entflechten: Sammlungen in Sammlungen herausnehmen, gemischte Sammlungen trennen (die kleinere Seite fliegt raus)', 'Untangle collections: remove collections nested in collections, split mixed collections (the smaller side is removed)'],
                 deleteEmpty: ['Leere Sammlungen und Playlists löschen (nur die Hülle, nie Medien)', 'Delete empty collections and playlists (the container only, never media)'],
+                cleanMeta: ['Metadaten der Sammlungen bereinigen: nur Genres, Studios und Altersfreigaben behalten, die ihre Filme wirklich haben (sonst tauchen sie in Filtern anderer Benutzer auf)', 'Clean collection metadata: keep only genres, studios and ratings their items really have (otherwise they show up in other users’ filters)'],
                 lockUsers: ['Sammlungen mit ihren Bibliotheken markieren und Benutzer sperren', 'Tag collections with their libraries and lock users'],
                 realtime: ['Sofort prüfen, wenn eine Sammlung angelegt oder befüllt wird', 'Check right after a collection is created or changed'],
                 dryRun: ['Testmodus: nur berichten, nichts ändern', 'Dry run: report only, change nothing'],
@@ -114,7 +116,7 @@
                 return Array.prototype.map.call(page.querySelectorAll('#' + id + ' input:checked'), function (i) { return i.value; });
             }
 
-            var flags = ['Untangle', 'DeleteEmpty', 'LockUsers', 'Realtime', 'DryRun'];
+            var flags = ['Untangle', 'DeleteEmpty', 'CleanMetadata', 'LockUsers', 'Realtime', 'DryRun'];
 
             page.addEventListener('pageshow', function () {
                 Dashboard.showLoadingMsg();

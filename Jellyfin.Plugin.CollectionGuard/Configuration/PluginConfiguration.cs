@@ -16,6 +16,9 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Delete empty collections and playlists (the container only, never media).</summary>
     public bool DeleteEmpty { get; set; } = false;
 
+    /// <summary>Collections/playlists only keep genres, studios and rating that their items really have.</summary>
+    public bool CleanMetadata { get; set; } = true;
+
     /// <summary>Tag collections/playlists with their source libraries and update users' library access + blocked tags.</summary>
     public bool LockUsers { get; set; } = true;
 

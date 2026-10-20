@@ -205,6 +205,58 @@ public class GuardService
             }
         }
 
+        // 3b) Container metadata must only reflect what is really inside (e.g. genres/studios a collection
+        //     kept from items that were removed – they would show up in other users' filter lists)
+        int cleaned = 0;
+        if (cfg.CleanMetadata)
+        {
+            foreach (var item in Containers())
+            {
+                ct.ThrowIfCancellationRequested();
+                var leafs = Leafs(item, new HashSet<Guid>());
+                if (leafs.Count == 0)
+                {
+                    continue;
+                }
+
+                var genres = leafs.SelectMany(l => l.Genres ?? Array.Empty<string>()).Where(g => !string.IsNullOrEmpty(g))
+                    .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(g => g, StringComparer.OrdinalIgnoreCase).ToArray();
+                var studios = leafs.SelectMany(l => l.Studios ?? Array.Empty<string>()).Where(g => !string.IsNullOrEmpty(g))
+                    .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(g => g, StringComparer.OrdinalIgnoreCase).ToArray();
+                var ratings = new HashSet<string>(leafs.Select(l => l.OfficialRating ?? string.Empty), StringComparer.OrdinalIgnoreCase);
+                var curG = (item.Genres ?? Array.Empty<string>()).OrderBy(g => g, StringComparer.OrdinalIgnoreCase).ToArray();
+                var curS = (item.Studios ?? Array.Empty<string>()).OrderBy(g => g, StringComparer.OrdinalIgnoreCase).ToArray();
+                var extraG = curG.Except(genres, StringComparer.OrdinalIgnoreCase).ToList();
+                var extraS = curS.Except(studios, StringComparer.OrdinalIgnoreCase).ToList();
+                var badRating = !string.IsNullOrEmpty(item.OfficialRating) && !ratings.Contains(item.OfficialRating);
+                if (extraG.Count == 0 && extraS.Count == 0 && !badRating)
+                {
+                    continue;
+                }
+
+                cleaned++;
+                if (cleaned <= 25)
+                {
+                    rep.AppendLine($"  {T("Metadaten bereinigt", "Metadata cleaned")} „{item.Name}“: " +
+                                   (extraG.Count > 0 ? T("Genres weg: ", "genres removed: ") + string.Join(", ", extraG.Take(6)) + (extraG.Count > 6 ? $" (+{extraG.Count - 6})" : string.Empty) + "; " : string.Empty) +
+                                   (extraS.Count > 0 ? T("Studios weg: ", "studios removed: ") + string.Join(", ", extraS.Take(6)) + (extraS.Count > 6 ? $" (+{extraS.Count - 6})" : string.Empty) + "; " : string.Empty) +
+                                   (badRating ? T("Altersfreigabe weg: ", "rating removed: ") + item.OfficialRating : string.Empty));
+                }
+
+                if (!dry)
+                {
+                    item.Genres = curG.Where(g => !extraG.Contains(g, StringComparer.OrdinalIgnoreCase)).ToArray();
+                    item.Studios = curS.Where(g => !extraS.Contains(g, StringComparer.OrdinalIgnoreCase)).ToArray();
+                    if (badRating)
+                    {
+                        item.OfficialRating = null!;
+                    }
+
+                    await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
+                }
+            }
+        }
+
         progress?.Report(80);
 
         // 4) Users: no access to restricted libraries, blocked tags for every library they cannot see
@@ -264,8 +316,8 @@ public class GuardService
         var header = rep.ToString().Split(Environment.NewLine)[0];
         rep.Remove(0, header.Length + Environment.NewLine.Length);
         rep.Insert(0, header + Environment.NewLine + T(
-            $"Ergebnis: {untangled} Sammlungen entflochten ({removedLinks} Zuordnungen), {deleted} leere entfernt, {tagged} neu markiert, {usersChanged} Benutzer angepasst",
-            $"Result: {untangled} collections untangled ({removedLinks} links), {deleted} empty removed, {tagged} re-tagged, {usersChanged} users updated")
+            $"Ergebnis: {untangled} Sammlungen entflochten ({removedLinks} Zuordnungen), {deleted} leere entfernt, {cleaned} Metadaten bereinigt, {tagged} neu markiert, {usersChanged} Benutzer angepasst",
+            $"Result: {untangled} collections untangled ({removedLinks} links), {deleted} empty removed, {cleaned} metadata cleaned, {tagged} re-tagged, {usersChanged} users updated")
             + Environment.NewLine);
         var text = rep.ToString();
         _log.LogInformation("Collection Guard:{NewLine}{Report}", Environment.NewLine, text);
