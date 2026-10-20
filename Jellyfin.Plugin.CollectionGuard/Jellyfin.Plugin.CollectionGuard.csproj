@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Build for a specific Jellyfin server version:
+         dotnet build -c Release -p:JellyfinVersion=12.1.0
+       The target framework is derived from the Jellyfin version:
+         10.10.x -> net8.0   10.11.x -> net9.0   12.x -> net10.0 -->
+  <PropertyGroup>
+    <JellyfinVersion Condition="'$(JellyfinVersion)' == ''">12.1.0</JellyfinVersion>
+    <TargetFramework Condition="$([System.Version]::Parse('$(JellyfinVersion)').Major) &gt;= 12">net10.0</TargetFramework>
+    <TargetFramework Condition="'$(TargetFramework)' == '' And $([System.Version]::Parse('$(JellyfinVersion)').CompareTo($([System.Version]::Parse('10.11.0')))) &gt;= 0">net9.0</TargetFramework>
+    <TargetFramework Condition="'$(TargetFramework)' == ''">net8.0</TargetFramework>
+    <RootNamespace>Jellyfin.Plugin.CollectionGuard</RootNamespace>
+    <AssemblyName>Jellyfin.Plugin.CollectionGuard</AssemblyName>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <!-- API changes since Jellyfin 10.11 (TaskTriggerInfoType, IUserManager.GetUsers) -->
+  <PropertyGroup Condition="$([System.Version]::Parse('$(JellyfinVersion)').CompareTo($([System.Version]::Parse('10.11.0')))) &gt;= 0">
+    <DefineConstants>$(DefineConstants);JF11</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinVersion)" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Model" Version="$(JellyfinVersion)" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Configuration\configPage.html" />
+    <EmbeddedResource Include="Configuration\configPage.html" />
+  </ItemGroup>
+
+</Project>

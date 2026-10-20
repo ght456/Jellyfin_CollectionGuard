@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Collection Guard</title>
+</head>
+<body>
+<div id="CollectionGuardPage" data-role="page" class="page type-interior pluginConfigurationPage"
+     data-require="emby-input,emby-button,emby-checkbox,emby-select">
+    <div data-role="content">
+        <div class="content-primary">
+            <h2>Collection Guard</h2>
+            <p data-t="intro"></p>
+
+            <form id="CollectionGuardForm">
+                <h3 data-t="libsTitle"></h3>
+                <div class="fieldDescription" data-t="libsDesc"></div>
+                <div id="restrictedLibs" class="checkboxList"></div>
+
+                <h3 data-t="usersTitle"></h3>
+                <div class="fieldDescription" data-t="usersDesc"></div>
+                <div id="allowedUsers" class="checkboxList"></div>
+
+                <h3 data-t="actionsTitle"></h3>
+                <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="Untangle"/><span data-t="untangle"></span></label>
+                <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="DeleteEmpty"/><span data-t="deleteEmpty"></span></label>
+                <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="LockUsers"/><span data-t="lockUsers"></span></label>
+                <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="Realtime"/><span data-t="realtime"></span></label>
+                <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="DryRun"/><span data-t="dryRun"></span></label>
+
+                <div class="inputContainer">
+                    <input is="emby-input" type="text" id="TagPrefix"/>
+                    <div class="fieldDescription" data-t="prefixDesc"></div>
+                </div>
+                <div class="selectContainer">
+                    <select is="emby-select" id="Language">
+                        <option value="auto">Auto</option>
+                        <option value="en">English</option>
+                        <option value="de">Deutsch</option>
+                    </select>
+                    <div class="fieldDescription" data-t="langDesc"></div>
+                </div>
+
+                <button is="emby-button" type="submit" class="raised button-submit block"><span data-t="save"></span></button>
+                <button is="emby-button" type="button" id="runNow" class="raised block"><span data-t="run"></span></button>
+            </form>
+
+            <h3 data-t="lastRun"></h3>
+            <pre id="LastReport" style="white-space:pre-wrap;font-size:13px;background:rgba(0,0,0,.25);padding:10px;border-radius:6px;max-height:500px;overflow:auto"></pre>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var pluginId = 'e604e2a0-d9f5-4560-b021-83415105b21c';
+            var page = document.querySelector('#CollectionGuardPage');
+            var de = (navigator.language || '').toLowerCase().indexOf('de') === 0;
+            var L = {
+                intro: ['Hält eingeschränkte Bibliotheken (z. B. private Bibliotheken oder Inhalte, die nicht für Kinder gedacht sind) aus Sammlungen und Playlists heraus, die andere sehen, entfernt leere Sammlungen und sperrt eingeschränkte Bibliotheken für alle außer den freigegebenen Benutzern. Läuft nach jedem Bibliotheks-Scan, beim Start, alle 6 Stunden und – wenn eingeschaltet – 60 Sekunden nach jeder Änderung an einer Sammlung.',
+                        'Keeps restricted libraries (e.g. private libraries or content not meant for children) out of collections and playlists other users can see, removes empty collections and locks restricted libraries for everyone except allowed users. Runs after every library scan, on startup, every 6 hours and – if enabled – 60 seconds after any collection change.'],
+                libsTitle: ['Eingeschränkte Bibliotheken', 'Restricted libraries'],
+                libsDesc: ['Nur die freigegebenen Benutzer unten dürfen diese Bibliotheken sehen.', 'Only the allowed users below may see these libraries.'],
+                usersTitle: ['Diese Benutzer dürfen eingeschränkte Bibliotheken sehen', 'Users allowed to see restricted libraries'],
+                usersDesc: ['Alle anderen verlieren den Zugriff – auch Administratoren.', 'Everyone else loses access – administrators included.'],
+                actionsTitle: ['Was soll passieren', 'What to do'],
+                untangle: ['Sammlungen entflechten: Sammlungen in Sammlungen herausnehmen, gemischte Sammlungen trennen (die kleinere Seite fliegt raus)', 'Untangle collections: remove collections nested in collections, split mixed collections (the smaller side is removed)'],
+                deleteEmpty: ['Leere Sammlungen und Playlists löschen (nur die Hülle, nie Medien)', 'Delete empty collections and playlists (the container only, never media)'],
+                lockUsers: ['Sammlungen mit ihren Bibliotheken markieren und Benutzer sperren', 'Tag collections with their libraries and lock users'],
+                realtime: ['Sofort prüfen, wenn eine Sammlung angelegt oder befüllt wird', 'Check right after a collection is created or changed'],
+                dryRun: ['Testmodus: nur berichten, nichts ändern', 'Dry run: report only, change nothing'],
+                prefixDesc: ['Vorsilbe der Bibliotheks-Schlagwörter (z. B. „lib:“ → „lib:Filme“).', 'Prefix of the library tags (e.g. “lib:” → “lib:Movies”).'],
+                langDesc: ['Sprache des Berichts', 'Report language'],
+                save: ['Speichern', 'Save'],
+                run: ['Jetzt prüfen', 'Run now'],
+                lastRun: ['Letzter Lauf', 'Last run'],
+                none: ['(noch kein Lauf)', '(no run yet)'],
+                started: ['Prüfung gestartet. Das Ergebnis erscheint unter „Letzter Lauf“ (Seite neu laden).', 'Check started. The result appears under “Last run” (reload the page).'],
+                notFound: ['Aufgabe nicht gefunden – Jellyfin neu starten?', 'Task not found – restart Jellyfin?']
+            };
+            function t(k) { return L[k][de ? 0 : 1]; }
+            Array.prototype.forEach.call(page.querySelectorAll('[data-t]'), function (el) { el.textContent = t(el.getAttribute('data-t')); });
+
+            function checkbox(container, value, label, checked) {
+                var l = document.createElement('label');
+                l.className = 'checkboxContainer';
+                var i = document.createElement('input');
+                i.setAttribute('is', 'emby-checkbox');
+                i.type = 'checkbox';
+                i.value = value;
+                i.checked = checked;
+                var s = document.createElement('span');
+                s.textContent = label;
+                l.appendChild(i);
+                l.appendChild(s);
+                container.appendChild(l);
+            }
+
+            function checkedValues(id) {
+                return Array.prototype.map.call(page.querySelectorAll('#' + id + ' input:checked'), function (i) { return i.value; });
+            }
+
+            var flags = ['Untangle', 'DeleteEmpty', 'LockUsers', 'Realtime', 'DryRun'];
+
+            page.addEventListener('pageshow', function () {
+                Dashboard.showLoadingMsg();
+                Promise.all([
+                    ApiClient.getPluginConfiguration(pluginId),
+                    ApiClient.getVirtualFolders(),
+                    ApiClient.getUsers()
+                ]).then(function (r) {
+                    var cfg = r[0], folders = r[1], users = r[2];
+                    var libBox = page.querySelector('#restrictedLibs');
+                    libBox.innerHTML = '';
+                    folders.filter(function (f) { return f.CollectionType !== 'boxsets' && f.CollectionType !== 'playlists'; })
+                        .forEach(function (f) { checkbox(libBox, f.Name, f.Name, (cfg.RestrictedLibraries || []).indexOf(f.Name) >= 0); });
+                    var userBox = page.querySelector('#allowedUsers');
+                    userBox.innerHTML = '';
+                    users.forEach(function (u) {
+                        checkbox(userBox, u.Name, u.Name + (u.Policy && u.Policy.IsAdministrator ? ' (Admin)' : ''),
+                            (cfg.AllowedUsers || []).indexOf(u.Name) >= 0);
+                    });
+                    flags.forEach(function (k) { page.querySelector('#' + k).checked = !!cfg[k]; });
+                    page.querySelector('#TagPrefix').value = cfg.TagPrefix || 'lib:';
+                    page.querySelector('#Language').value = cfg.Language || 'auto';
+                    page.querySelector('#LastReport').textContent = cfg.LastReport || t('none');
+                    Dashboard.hideLoadingMsg();
+                });
+            });
+
+            page.querySelector('#CollectionGuardForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginId).then(function (cfg) {
+                    cfg.RestrictedLibraries = checkedValues('restrictedLibs');
+                    cfg.AllowedUsers = checkedValues('allowedUsers');
+                    flags.forEach(function (k) { cfg[k] = page.querySelector('#' + k).checked; });
+                    cfg.TagPrefix = page.querySelector('#TagPrefix').value || 'lib:';
+                    cfg.Language = page.querySelector('#Language').value || 'auto';
+                    ApiClient.updatePluginConfiguration(pluginId, cfg).then(Dashboard.processPluginConfigurationUpdateResult);
+                });
+                return false;
+            });
+
+            page.querySelector('#runNow').addEventListener('click', function () {
+                ApiClient.getScheduledTasks().then(function (tasks) {
+                    var task = tasks.filter(function (x) { return x.Key === 'CollectionGuardCheck'; })[0];
+                    if (!task) { Dashboard.alert(t('notFound')); return; }
+                    ApiClient.startScheduledTask(task.Id).then(function () { Dashboard.alert(t('started')); });
+                });
+            });
+        })();
+    </script>
+</div>
+</body>
+</html>

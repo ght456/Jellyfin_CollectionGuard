@@ -1,0 +1,67 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        jellyfin: ['10.10.7', '10.11.11', '12.1.0']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+      - name: Build for Jellyfin ${{ matrix.jellyfin }}
+        run: dotnet build Jellyfin.Plugin.CollectionGuard/Jellyfin.Plugin.CollectionGuard.csproj -c Release -p:JellyfinVersion=${{ matrix.jellyfin }} -o out
+      - name: Package
+        run: |
+          VERSION=$(grep -oP '(?<=<AssemblyVersion>)[^<]+' Jellyfin.Plugin.CollectionGuard/Jellyfin.Plugin.CollectionGuard.csproj)
+          ABI=$(echo "${{ matrix.jellyfin }}" | awk -F. '{print $1"."$2".0.0"}')
+          mkdir pkg && cp out/Jellyfin.Plugin.CollectionGuard.dll pkg/
+          (cd pkg && zip -q ../collection-guard_${VERSION}_jellyfin-${{ matrix.jellyfin }}.zip *)
+          echo "$ABI" > abi_${{ matrix.jellyfin }}.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.jellyfin }}
+          path: |
+            collection-guard_*.zip
+            abi_*.txt
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
+      - name: Update plugin repository manifest
+        run: |
+          python3 scripts/update_manifest.py dist "${{ github.repository }}" "${{ github.ref_name }}"
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "manifest: ${{ github.ref_name }}" || echo "nothing to commit"
+          git push
