@@ -45,6 +45,18 @@
                 <button is="emby-button" type="button" id="runNow" class="raised block"><span data-t="run"></span></button>
             </form>
 
+            <style>
+                @keyframes cgspin { to { transform: rotate(360deg); } }
+                #cgStatus { display:none; align-items:center; gap:12px; margin:14px 0 4px; }
+                #cgStatus .cg-spin { width:22px; height:22px; border-radius:50%; border:3px solid rgba(255,255,255,.2);
+                    border-top-color:#00a4dc; animation:cgspin .8s linear infinite; flex:none; }
+                #cgStatus .cg-bar { flex:1; height:6px; background:rgba(255,255,255,.12); border-radius:3px; overflow:hidden; }
+                #cgStatus .cg-fill { height:100%; width:0; background:#00a4dc; transition:width .4s; }
+                #cgStatus .cg-txt { min-width:110px; }
+                #LastReport.cg-new { animation: cgflash 1.2s ease-out; }
+                @keyframes cgflash { from { background: rgba(0,164,220,.35); } to { background: rgba(0,0,0,.25); } }
+            </style>
+            <div id="cgStatus"><div class="cg-spin"></div><span class="cg-txt"></span><div class="cg-bar"><div class="cg-fill"></div></div></div>
             <h3 data-t="lastRun"></h3>
             <pre id="LastReport" style="white-space:pre-wrap;font-size:13px;background:rgba(0,0,0,.25);padding:10px;border-radius:6px;max-height:500px;overflow:auto"></pre>
         </div>
@@ -74,7 +86,8 @@
                 run: ['Jetzt prüfen', 'Run now'],
                 lastRun: ['Letzter Lauf', 'Last run'],
                 none: ['(noch kein Lauf)', '(no run yet)'],
-                started: ['Prüfung gestartet. Das Ergebnis erscheint unter „Letzter Lauf“ (Seite neu laden).', 'Check started. The result appears under “Last run” (reload the page).'],
+                running: ['läuft …', 'running …'],
+                timeout: ['Noch kein neuer Bericht – später neu laden.', 'No new report yet – reload later.'],
                 notFound: ['Aufgabe nicht gefunden – Jellyfin neu starten?', 'Task not found – restart Jellyfin?']
             };
             function t(k) { return L[k][de ? 0 : 1]; }
@@ -142,10 +155,50 @@
             });
 
             page.querySelector('#runNow').addEventListener('click', function () {
+                var btn = page.querySelector('#runNow');
+                var status = page.querySelector('#cgStatus');
+                var txt = status.querySelector('.cg-txt');
+                var fill = status.querySelector('.cg-fill');
+                var box = page.querySelector('#LastReport');
+                var before = box.textContent;
+                function done(text) {
+                    status.style.display = 'none';
+                    btn.disabled = false;
+                    box.textContent = text;
+                    box.classList.remove('cg-new'); void box.offsetWidth; box.classList.add('cg-new');
+                }
                 ApiClient.getScheduledTasks().then(function (tasks) {
                     var task = tasks.filter(function (x) { return x.Key === 'CollectionGuardCheck'; })[0];
                     if (!task) { Dashboard.alert(t('notFound')); return; }
-                    ApiClient.startScheduledTask(task.Id).then(function () { Dashboard.alert(t('started')); });
+                    btn.disabled = true;
+                    status.style.display = 'flex';
+                    txt.textContent = t('running');
+                    fill.style.width = '3%';
+                    ApiClient.startScheduledTask(task.Id).then(function () {
+                        var tries = 0;
+                        var timer = setInterval(function () {
+                            tries++;
+                            ApiClient.getScheduledTask(task.Id).then(function (st) {
+                                var pct = Math.round(st.CurrentProgressPercentage || 0);
+                                if (st.State === 'Running') {
+                                    txt.textContent = t('running') + ' ' + pct + ' %';
+                                    fill.style.width = Math.max(3, pct) + '%';
+                                    return;
+                                }
+                                ApiClient.getPluginConfiguration(pluginId).then(function (cfg) {
+                                    var rep = cfg.LastReport || '';
+                                    if (rep && rep !== before) {
+                                        clearInterval(timer);
+                                        fill.style.width = '100%';
+                                        done(rep);
+                                    } else if (tries >= 120) {
+                                        clearInterval(timer);
+                                        done(t('timeout') + '\n\n' + before);
+                                    }
+                                });
+                            });
+                        }, 1500);
+                    });
                 });
             });
         })();

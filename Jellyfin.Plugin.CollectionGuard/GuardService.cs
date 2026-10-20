@@ -247,7 +247,9 @@ public class GuardService
         }
 
         progress?.Report(100);
-        rep.Insert(0, T(
+        var header = rep.ToString().Split(Environment.NewLine)[0];
+        rep.Remove(0, header.Length + Environment.NewLine.Length);
+        rep.Insert(0, header + Environment.NewLine + T(
             $"Ergebnis: {untangled} Sammlungen entflochten ({removedLinks} Zuordnungen), {deleted} leere entfernt, {tagged} neu markiert, {usersChanged} Benutzer angepasst",
             $"Result: {untangled} collections untangled ({removedLinks} links), {deleted} empty removed, {tagged} re-tagged, {usersChanged} users updated")
             + Environment.NewLine);
